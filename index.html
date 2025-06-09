@@ -6,15 +6,8 @@
     <title>Prospect Insights: The Evolving Workplace</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: Warm Neutrals & Slate Blue -->
-    <!-- Application Structure Plan: The SPA is designed as an interactive dashboard, moving away from the linear report format. The core structure features: 1) A main navigation bar with key themes that act as filters. 2) A dynamic bar chart visualizing the prevalence of these themes across the prospect list. 3) An interactive grid of company cards. This dashboard approach was chosen because it allows users (ScreenCloud sales/marketing) to quickly explore and cross-reference information. Users can filter by a theme (e.g., "Frontline Worker Connectivity") to instantly see all relevant companies and their specific initiatives, making it highly efficient for preparing for targeted conversations. The user flow is designed for exploration: see a high-level trend in the chart, filter by that trend, and then drill down into specific company details. -->
-    <!-- Visualization & Content Choices: 
-        - Report Info: Frequency of key themes across all companies. -> Goal: Show which themes are most dominant. -> Viz/Presentation: Interactive Bar Chart (Chart.js/Canvas). -> Interaction: Clicking a bar on the chart filters the company grid below. -> Justification: Provides a quick, high-level overview of the market landscape and serves as the primary navigation/filtering tool.
-        - Report Info: Individual company initiatives and supporting evidence. -> Goal: Provide specific, actionable insights for each prospect. -> Viz/Presentation: Interactive Company Cards (HTML/CSS/Tailwind). -> Interaction: Cards are filtered by the theme selector or chart clicks. They have visible tags and reveal more details on hover/click. -> Justification: Organizes detailed information into digestible chunks and makes it easily searchable and filterable.
-        - Report Info: The four main thematic convergences. -> Goal: Group complex information logically. -> Viz/Presentation: Theme filter buttons (HTML/CSS/Tailwind). -> Interaction: Buttons control both the chart highlight and the company card grid. -> Justification: Creates a clear, task-oriented navigation structure that aligns with the report's core findings. 
-    -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -61,6 +54,54 @@
             font-weight: 500;
             line-height: 1;
         }
+        /* NEW STYLES FOR RELATIONAL MAP */
+        .relational-map-container {
+            position: relative;
+            width: 100%;
+            height: 70vh; /* Increased height for better viewing */
+            min-height: 600px;
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            cursor: grab;
+        }
+        .relational-map-container:active {
+             cursor: grabbing;
+        }
+        .graph-tooltip {
+            position: absolute;
+            text-align: left;
+            padding: 8px 12px;
+            font-size: 12px;
+            background: #2d3748;
+            color: #fff;
+            border-radius: 6px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            line-height: 1.5;
+        }
+        .node-group text {
+            font-size: 12px;
+            fill: #2d3748;
+            font-weight: 500;
+            pointer-events: none; /* Make text unclickable so node click works */
+        }
+        .node-group circle {
+            stroke: #fff;
+            stroke-width: 2px;
+            cursor: pointer;
+        }
+        .link {
+            stroke: #9ca3af;
+            stroke-opacity: 0.6;
+        }
+        .link:hover {
+            stroke-opacity: 1;
+            stroke: #3B5998;
+        }
     </style>
 </head>
 <body class="text-gray-800">
@@ -90,6 +131,14 @@
                     <p id="filter-status" class="text-gray-600 mb-6">Showing all companies. Select a theme to begin filtering.</p>
                     <div id="company-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                     </div>
+                </div>
+            </section>
+
+            <section id="relational-map-section" class="mt-12">
+                <h2 class="text-xl md:text-2xl font-bold text-gray-900 mb-4 text-center">Interactive Relational Map</h2>
+                <p class="text-gray-600 mb-6 text-center max-w-3xl mx-auto">Click a company to isolate its connections. Hover over a line to see shared themes. Drag to pan, scroll to zoom.</p>
+                <div id="relationalMapContainer" class="relational-map-container">
+                    <svg id="relationalMapSvg"></svg>
                 </div>
             </section>
         </main>
@@ -169,8 +218,10 @@
             populateFilters();
             populateGrid(companyData);
             createChart();
+            createRelationalMap();
         });
 
+        // --- EXISTING DASHBOARD FUNCTIONS (UNCHANGED) ---
         function populateFilters() {
             const filtersContainer = document.getElementById('theme-filters');
             let buttonsHTML = `<button class="theme-button active" data-theme="All">All Companies</button>`;
@@ -253,93 +304,140 @@
 
             chart = new Chart(ctx, {
                 type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Number of Companies',
-                        data: data,
-                        backgroundColor: backgroundColors,
-                        borderColor: backgroundColors.map(c => c + 'B3'),
-                        borderWidth: 1,
-                        borderRadius: 4
-                    }]
-                },
+                data: { labels, datasets: [{ label: 'Number of Companies', data, backgroundColor: backgroundColors, borderColor: backgroundColors.map(c => c + 'B3'), borderWidth: 1, borderRadius: 4 }] },
                 options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            beginAtZero: true,
-                            grid: {
-                                color: '#e2e8f0',
-                            },
-                            ticks: {
-                                color: '#4a5568'
-                            }
-                        },
-                        y: {
-                            grid: {
-                                display: false,
-                            },
-                            ticks: {
-                                color: '#1a202c',
-                                font: {
-                                    weight: '500'
-                                },
-                                autoSkip: false,
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            backgroundColor: '#1a202c',
-                            titleFont: {
-                                size: 14,
-                                weight: 'bold'
-                            },
-                            bodyFont: {
-                                size: 12
-                            },
-                            padding: 10,
-                            cornerRadius: 4,
-                            displayColors: false
-                        }
-                    },
-                    onClick: (event, elements) => {
-                        if (elements.length > 0) {
-                            const chartElement = elements[0];
-                            const index = chartElement.index;
-                            const themeId = themeIds[index];
-                            handleFilterClick(themeId);
-                        }
-                    },
-                    onHover: (event, chartElement) => {
-                         event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
-                    }
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    scales: { x: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { color: '#4a5568' } }, y: { grid: { display: false }, ticks: { color: '#1a202c', font: { weight: '500' }, autoSkip: false } } },
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a202c', titleFont: { size: 14, weight: 'bold' }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 4, displayColors: false } },
+                    onClick: (event, elements) => { if (elements.length > 0) handleFilterClick(themeIds[elements[0].index]); },
+                    onHover: (event, chartElement) => { event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default'; }
                 }
             });
         }
 
         function updateChartHighlight(themeId) {
             const themeCounts = themes.map(theme => ({
-                id: theme.id,
-                count: companyData.filter(c => c.themes.includes(theme.id)).length,
-                color: theme.color
+                id: theme.id, count: companyData.filter(c => c.themes.includes(theme.id)).length, color: theme.color
             })).sort((a, b) => b.count - a.count);
-            
-            const backgroundColors = themeCounts.map(t => {
-                return (themeId === 'All' || t.id === themeId) ? t.color : '#e2e8f0';
-            });
-            
+            const backgroundColors = themeCounts.map(t => (themeId === 'All' || t.id === themeId) ? t.color : '#e2e8f0');
             chart.data.datasets[0].backgroundColor = backgroundColors;
             chart.data.datasets[0].borderColor = backgroundColors.map(c => c === '#e2e8f0' ? '#e2e8f0' : c + 'B3');
             chart.update();
         }
-    </script>
 
+        // --- NEW & IMPROVED RELATIONAL MAP FUNCTION ---
+        function createRelationalMap() {
+            const companiesWithThemes = companyData.filter(c => c.themes && c.themes.length > 0);
+            const nodes = companiesWithThemes.map(c => ({ id: c.name, industry: c.industry }));
+            const links = [];
+
+            for (let i = 0; i < companiesWithThemes.length; i++) {
+                for (let j = i + 1; j < companiesWithThemes.length; j++) {
+                    const companyA = companiesWithThemes[i];
+                    const companyB = companiesWithThemes[j];
+                    const sharedThemeIds = companyA.themes.filter(theme => companyB.themes.includes(theme));
+
+                    if (sharedThemeIds.length > 0) {
+                        const sharedThemeNames = sharedThemeIds.map(id => themes.find(t => t.id === id)?.name || id);
+                        links.push({
+                            source: companyA.name,
+                            target: companyB.name,
+                            value: sharedThemeIds.length,
+                            sharedThemes: sharedThemeNames
+                        });
+                    }
+                }
+            }
+            
+            const container = document.getElementById('relationalMapContainer');
+            if (!container) return;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            const svg = d3.select("#relationalMapSvg")
+                .attr("viewBox", [0, 0, width, height]);
+
+            const g = svg.append("g");
+
+            const tooltip = d3.select("body").append("div")
+                .attr("class", "graph-tooltip");
+
+            const simulation = d3.forceSimulation(nodes)
+                .force("link", d3.forceLink(links).id(d => d.id).distance(100).strength(0.8))
+                .force("charge", d3.forceManyBody().strength(-800))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("x", d3.forceX(width / 2).strength(0.1))
+                .force("y", d3.forceY(height / 2).strength(0.1));
+
+            const linkElements = g.append("g")
+                .selectAll("line")
+                .data(links)
+                .join("line")
+                .attr("class", "link")
+                .attr("stroke-width", d => Math.sqrt(d.value) * 2)
+                .on("mouseover", (event, d) => {
+                    tooltip.style("opacity", 1)
+                        .html(`<strong>Connection:</strong><br>${d.source.id} & ${d.target.id}<br><strong>Shared Themes:</strong><br>${d.sharedThemes.join('<br>')}`)
+                        .style("left", `${event.pageX + 15}px`)
+                        .style("top", `${event.pageY}px`);
+                })
+                .on("mouseout", () => tooltip.style("opacity", 0));
+
+            const nodeElements = g.append("g")
+                .selectAll(".node-group")
+                .data(nodes)
+                .join("g")
+                .attr("class", "node-group")
+                .call(drag(simulation));
+
+            nodeElements.append("circle").attr("r", 10).attr("fill", d => industryColor(d.industry));
+            nodeElements.append("text").text(d => d.id).attr("x", 15).attr("y", 4);
+
+            nodeElements.on("click", (event, d_clicked) => {
+                nodeElements.style("opacity", 0.2);
+                linkElements.style("opacity", 0.1);
+
+                d3.select(event.currentTarget).style("opacity", 1);
+                
+                const connectedLinks = linkElements.filter(l => l.source.id === d_clicked.id || l.target.id === d_clicked.id);
+                connectedLinks.style("opacity", 1);
+                
+                const connectedNodes = new Set();
+                connectedNodes.add(d_clicked.id);
+                connectedLinks.each(l => {
+                    connectedNodes.add(l.source.id);
+                    connectedNodes.add(l.target.id);
+                });
+
+                nodeElements.filter(n => connectedNodes.has(n.id)).style("opacity", 1);
+                
+                event.stopPropagation();
+            });
+
+            svg.on("click", () => {
+                nodeElements.style("opacity", 1);
+                linkElements.style("opacity", 0.6);
+            });
+
+            svg.call(d3.zoom().on("zoom", event => g.attr("transform", event.transform)));
+
+            simulation.on("tick", () => {
+                linkElements.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+                nodeElements.attr("transform", d => `translate(${d.x},${d.y})`);
+            });
+
+            function drag(simulation) {
+                function dragstarted(event, d) { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
+                function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+                function dragended(event, d) { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }
+                return d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended);
+            }
+
+            function industryColor(industry) {
+                const colors = { "Technology": "#3182CE", "Mining": "#718096", "Transportation": "#4299E1", "Pharmaceuticals": "#63B3ED", "Financial Services": "#90CDF4", "Telecommunications": "#2C5282", "Real Estate": "#2B6CB0", "Retail": "#4A5568", "Services": "#BEE3F8", "Utilities": "#718096", "Hospitality": "#4299E1", "Manufacturing": "#3182CE", "Consumer Goods": "#63B3ED", "Professional Services": "#90CDF4", "Media/Info Services": "#2C5282", "Education": "#2B6CB0", "Construction": "#4A5568", "Non-Profit": "#BEE3F8" };
+                return colors[industry] || "#A0AEC0";
+            }
+        }
+    </script>
 </body>
 </html>
