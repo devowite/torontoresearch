@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prospect Insights: The Evolving Workplace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals & Slate Blue -->
+    <!-- Application Structure Plan: The SPA is designed as an interactive dashboard, moving away from the linear report format. The core structure features: 1) A main navigation bar with key themes that act as filters. 2) A dynamic bar chart visualizing the prevalence of these themes across the prospect list. 3) An interactive grid of company cards. This dashboard approach was chosen because it allows users (ScreenCloud sales/marketing) to quickly explore and cross-reference information. Users can filter by a theme (e.g., "Frontline Worker Connectivity") to instantly see all relevant companies and their specific initiatives, making it highly efficient for preparing for targeted conversations. The user flow is designed for exploration: see a high-level trend in the chart, filter by that trend, and then drill down into specific company details. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Frequency of key themes across all companies. -> Goal: Show which themes are most dominant. -> Viz/Presentation: Interactive Bar Chart (Chart.js/Canvas). -> Interaction: Clicking a bar on the chart filters the company grid below. -> Justification: Provides a quick, high-level overview of the market landscape and serves as the primary navigation/filtering tool.
+        - Report Info: Individual company initiatives and supporting evidence. -> Goal: Provide specific, actionable insights for each prospect. -> Viz/Presentation: Interactive Company Cards (HTML/CSS/Tailwind). -> Interaction: Cards are filtered by the theme selector or chart clicks. They have visible tags and reveal more details on hover/click. -> Justification: Organizes detailed information into digestible chunks and makes it easily searchable and filterable.
+        - Report Info: The four main thematic convergences. -> Goal: Group complex information logically. -> Viz/Presentation: Theme filter buttons (HTML/CSS/Tailwind). -> Interaction: Buttons control both the chart highlight and the company card grid. -> Justification: Creates a clear, task-oriented navigation structure that aligns with the report's core findings. 
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f7f4;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 50vh;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .theme-button {
+            transition: all 0.3s ease;
+        }
+        .theme-button.active {
+            background-color: #3B5998 !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.1);
+        }
+        .company-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+            will-change: transform, box-shadow;
+        }
+        .company-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+        }
+        .company-card.hidden {
+            display: none;
+        }
+        .tag {
+            display: inline-block;
+            padding: 0.25rem 0.625rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+
+        <header class="text-center mb-10 md:mb-16">
+            <h1 class="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 tracking-tight">Navigating the Evolving Workplace</h1>
+            <p class="mt-3 md:mt-4 max-w-2xl mx-auto text-base md:text-lg text-gray-600">An interactive analysis of key communication and technology themes among prospective clients.</p>
+        </header>
+
+        <main>
+            <section id="dashboard" class="bg-white rounded-2xl shadow-lg p-6 md:p-8">
+                <div class="mb-8">
+                    <h2 class="text-xl md:text-2xl font-bold text-gray-900 mb-2">Explore Key Themes</h2>
+                    <p class="text-gray-600 mb-6">This application visualizes the key themes from our research report. Use the buttons or click the chart bars to filter the company list and uncover specific initiatives. This will help you identify shared priorities and tailor your conversations effectively.</p>
+                    <div id="theme-filters" class="flex flex-wrap gap-2 md:gap-3 justify-center">
+                    </div>
+                </div>
+
+                <div class="chart-container mb-12">
+                    <canvas id="themesChart"></canvas>
+                </div>
+
+                <div>
+                    <h2 class="text-xl md:text-2xl font-bold text-gray-900 mb-4">Prospect Deep Dive</h2>
+                    <p id="filter-status" class="text-gray-600 mb-6">Showing all companies. Select a theme to begin filtering.</p>
+                    <div id="company-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <footer class="text-center mt-12">
+            <p class="text-sm text-gray-500">&copy; 2024 ScreenCloud Prospect Insights. For internal use only.</p>
+        </footer>
+    </div>
+
+    <script>
+        const companyData = [
+            { name: "1Password", industry: "Technology", themes: ["Secure Comms", "Workplace Tech", "AI/Data"], snippet: "Emphasizes secure internal comms and MFA. Recently launched an Extended Access Management (XAM) platform using AI to enhance security." },
+            { name: "Agnico Eagle Mines", industry: "Mining", themes: ["Well-being", "Frontline Comms"], snippet: "Focuses on comprehensive health, safety, and wellness programs, including mental health awareness for all personnel, even contractors." },
+            { name: "Air Canada", industry: "Transportation", themes: ["Digital Signage", "Frontline Comms", "Secure Comms"], snippet: "Piloted 'Air Canada News,' a bilingual digital signage network to keep mobile cabin crews informed with real-time flight and company data." },
+            { name: "ApplyBoard", industry: "Technology", themes: [], snippet: "No specific initiatives identified in the report. General focus on scaling internal comms for growth." },
+            { name: "Apotex", industry: "Pharmaceuticals", themes: ["Employee Comms"], snippet: "Maintains a formal corporate communications structure for media and press relations, indicating a structured approach to comms." },
+            { name: "AstraZeneca", industry: "Pharmaceuticals", themes: ["Engagement", "DEI"], snippet: "Utilizes Employee Resource Groups (ERGs) as a fundamental part of its strategy to drive connection, engagement, and belonging." },
+            { name: "Bank of Montreal", industry: "Financial Services", themes: ["Employee Comms", "Workplace Tech", "Secure Comms"], snippet: "Actively recruiting specialized roles like 'Content Designer - Internal Communications' to manage internal channels and events like town halls." },
+            { name: "Bell", industry: "Telecommunications", themes: ["Digital Signage", "Employee Comms"], snippet: "Offers Digital Signage Solutions for businesses, highlighting use cases like company announcements, productivity metrics, and alerts." },
+            { name: "Cadillac Fairview", industry: "Real Estate", themes: ["Workplace Tech"], snippet: "Launched the 'CF Concierge' mobile app to enhance the workplace experience with digital amenities like mobile key access and community info." },
+            { name: "Canadian Tire", industry: "Retail", themes: ["Engagement", "DEI", "AI/Data"], snippet: "Uses employee listening tools like surveys and 'Courageous Conversations' to drive cultural change and provide equitable development opportunities." },
+            { name: "Enercare", industry: "Services", themes: ["Engagement", "Well-being", "Frontline Comms"], snippet: "Cultivates a diverse culture, promotes employee development, and provides robust mental health support, guided by values like 'We Win Together'." },
+            { name: "Enbridge Gas", industry: "Utilities", themes: ["Frontline Comms"], snippet: "Maintains an extensive and structured contact list for various communications needs, including emergencies, suggesting a focus on operational comms." },
+            { name: "EQB", industry: "Financial Services", themes: ["Engagement", "Well-being", "Secure Comms"], snippet: "Corporate responsibility pillars include 'Challengers' (employees), emphasizing meaningful work, growth opportunities, and an inclusive culture." },
+            { name: "Four Seasons Hotels", industry: "Hospitality", themes: ["Digital Signage"], snippet: "Industry analysis suggests digital signage use in lobbies for personalized welcomes, wayfinding, and event schedules, integrated with Property Management Systems." },
+            { name: "Franklin Templeton", industry: "Financial Services", themes: ["Workplace Tech", "Secure Comms"], snippet: "Utilizes 'cutting-edge tools, resources, and solutions' to elevate workplace benefit programs and engage employees." },
+            { name: "General Motors", industry: "Manufacturing", themes: ["Employee Comms", "Frontline Comms"], snippet: "Seeking a 'Workplace/Internal Communications Senior Manager' to enhance the employee experience and implement global internal comms strategies." },
+            { name: "Hitachi Rail", industry: "Manufacturing", themes: ["Engagement", "DEI"], snippet: "Actively promotes a culture of open communication and creates safe spaces for employees to share ideas." },
+            { name: "Holt Renfrew", industry: "Retail", themes: ["Employee Comms"], snippet: "A 'Specialist Trade Marketing Operations' role facilitates internal communication to ensure alignment among cross-functional teams." },
+            { name: "Husky Technologies", industry: "Manufacturing", themes: ["Engagement"], snippet: "Describes its work environment as 'like family,' valuing employee ideas and fostering diversity, honesty, and mutual respect." },
+            { name: "IBM Canada", industry: "Technology", themes: ["Secure Comms"], snippet: "Mentioned in the context of a digital signage hack, highlighting the critical need for MFA and SSO to secure connected networks." },
+            { name: "IKEA Canada", industry: "Retail", themes: ["Engagement", "DEI", "Well-being"], snippet: "Champions a culture of togetherness and inclusion, with a strong focus on employee growth, equal opportunity, and comprehensive benefits." },
+            { name: "Kinaxis", industry: "Technology", themes: ["Engagement", "Well-being"], snippet: "Highlights a welcoming, supportive, and people-first culture that prioritizes employee well-being and work-life balance." },
+            { name: "Kraft-Heinz", industry: "Consumer Goods", themes: ["Frontline Comms", "AI/Data", "Workplace Tech"], snippet: "Deploys a 'Connected Worker platform' to translate operational data into actionable insights for frontline team members on the factory floor." },
+            { name: "Labatt Breweries", industry: "Consumer Goods", themes: ["Engagement"], snippet: "Empowers employees through initiatives like an 'Ideas Process' designed to solicit and implement employee suggestions." },
+            { name: "Lactalis", industry: "Consumer Goods", themes: ["Digital Signage"], snippet: "Plans to feature the 'Blue Cow' logo on digital advertising and in-store signage to help consumers identify products made with Canadian dairy." },
+            { name: "lululemon", industry: "Retail", themes: ["Engagement", "Well-being"], snippet: "Leverages community engagement as a cornerstone of its strategy to foster teamwork and a connection to the company's core values." },
+            { name: "Magna International", industry: "Manufacturing", themes: ["Engagement", "DEI"], snippet: "Fosters a culture of integrity and teamwork, with a deep commitment to creating a diverse and inclusive workplace supported by ERGs." },
+            { name: "Marsh McLennan", industry: "Professional Services", themes: ["Employee Comms", "AI/Data"], snippet: "Internal Comms Specialist role includes measuring the effectiveness of communications and using survey feedback for data-informed improvements." },
+            { name: "McCain Foods", industry: "Consumer Goods", themes: ["Engagement", "DEI"], snippet: "Committed to diversity and inclusion, aiming to cultivate a sense of belonging and psychological safety for all employees through ERGs." },
+            { name: "McMaster University", industry: "Education", themes: ["Digital Signage", "Employee Comms"], snippet: "Leverages digital signage extensively for campus-wide communication, including news, events, and emergency notifications, with advanced features." },
+            { name: "Molson Coors", industry: "Consumer Goods", themes: ["Employee Comms", "Frontline Comms", "Well-being"], snippet: "Used town halls and team meetings to communicate new musculoskeletal (MSK) health benefits to employees in physically demanding jobs." },
+            { name: "Mondelez Intl.", industry: "Consumer Goods", themes: ["Engagement", "DEI"], snippet: "Purpose includes empowering employees to 'be themselves, speak up, and embrace our diversity' through robust development programs." },
+            { name: "Nestle", industry: "Consumer Goods", themes: ["Workplace Tech", "AI/Data", "Engagement"], snippet: "Launched a 'Future of Work' program providing access to AI-driven tools, including an internal ChatGPT equivalent named NesGPT." },
+            { name: "PCL", industry: "Construction", themes: ["Engagement", "Frontline Comms"], snippet: "Actively supports employee-driven philanthropic efforts, highlighting how community engagement provides valuable perspective." },
+            { name: "PointClickCare", industry: "Technology", themes: ["Digital Signage"], snippet: "Offers 'Senior Sign,' a specialized digital interface for senior living facilities to streamline the resident move-in process by digitizing paperwork." },
+            { name: "RBC", industry: "Financial Services", themes: ["Engagement", "DEI", "Secure Comms"], snippet: "Emphasizes a culture of collaboration, mutual respect, continuous learning, and a strong commitment to diversity and inclusion." },
+            { name: "Salvation Army", industry: "Non-Profit", themes: ["Employee Comms"], snippet: "Employs an 'Audio-Visual Technical Specialist' to support internal and external communication efforts through live and streamed events." },
+            { name: "Shopify", industry: "Technology", themes: ["Engagement", "Well-being"], snippet: "Designs its HR strategy with a central focus on employee well-being, believing this is key to creating an engaged and productive workforce." },
+            { name: "Sobeys", industry: "Retail", themes: ["Digital Signage"], snippet: "Utilizes a suite of in-store media, which includes digital signage and targeted messaging, to enhance the shopping environment." },
+            { name: "Sofina Foods", industry: "Consumer Goods", themes: ["Workplace Tech"], snippet: "Relies on a specialized Maintenance Management System (SHIRE) for its manufacturing operations, indicating dependence on specific workplace tech." },
+            { name: "Thomson Reuters", industry: "Media/Info Services", themes: ["Engagement", "DEI"], snippet: "Fosters an inclusive environment through its employee networks, ensuring all individuals are valued, respected, and encouraged to contribute." },
+            { name: "University of Toronto", industry: "Education", themes: ["Workplace Tech", "Secure Comms"], snippet: "Offers 'Digital Workplace Support Services,' including comprehensive assistance for Microsoft 365, mobile device setup, and robust remote work support." }
+        ];
+
+        const themes = [
+            { id: 'Engagement', name: 'Employee Engagement & Culture', color: '#4A5568' },
+            { id: 'Digital Signage', name: 'Digital Signage Adoption', color: '#2C5282' },
+            { id: 'Workplace Tech', name: 'Workplace Tech Modernization', color: '#2B6CB0' },
+            { id: 'Secure Comms', name: 'Secure Communications', color: '#3182CE' },
+            { id: 'Frontline Comms', name: 'Frontline Worker Connectivity', color: '#4299E1' },
+            { id: 'DEI', name: 'Diversity, Equity & Inclusion', color: '#63B3ED' },
+            { id: 'AI/Data', name: 'AI & Data-Driven Initiatives', color: '#90CDF4' },
+            { id: 'Well-being', name: 'Employee Well-being', color: '#BEE3F8' },
+            { id: 'Employee Comms', name: 'Enhanced Employee Comms', color: '#718096' }
+        ];
+
+        const themeColors = themes.reduce((acc, theme) => {
+            acc[theme.id] = theme.color;
+            return acc;
+        }, {});
+
+        let chart;
+        let activeFilter = 'All';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            populateFilters();
+            populateGrid(companyData);
+            createChart();
+        });
+
+        function populateFilters() {
+            const filtersContainer = document.getElementById('theme-filters');
+            let buttonsHTML = `<button class="theme-button active" data-theme="All">All Companies</button>`;
+            themes.forEach(theme => {
+                buttonsHTML += `<button class="theme-button" data-theme="${theme.id}">${theme.name}</button>`;
+            });
+            filtersContainer.innerHTML = buttonsHTML;
+
+            const buttons = filtersContainer.querySelectorAll('.theme-button');
+            buttons.forEach(button => {
+                button.style.backgroundColor = '#edf2f7';
+                button.style.color = '#4a5568';
+                button.style.padding = '0.5rem 1rem';
+                button.style.borderRadius = '9999px';
+                button.style.fontWeight = '500';
+                button.addEventListener('click', () => handleFilterClick(button.dataset.theme));
+            });
+            filtersContainer.querySelector('[data-theme="All"]').classList.add('active');
+        }
+
+        function handleFilterClick(themeId) {
+            activeFilter = themeId;
+            updateActiveButton(themeId);
+            const filteredCompanies = themeId === 'All' ? companyData : companyData.filter(c => c.themes.includes(themeId));
+            populateGrid(filteredCompanies);
+            updateChartHighlight(themeId);
+            updateFilterStatus(themeId, filteredCompanies.length);
+        }
+
+        function updateActiveButton(themeId) {
+            document.querySelectorAll('#theme-filters .theme-button').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.theme === themeId) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        function populateGrid(data) {
+            const grid = document.getElementById('company-grid');
+            grid.innerHTML = data.map(company => `
+                <div class="company-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm" data-company="${company.name}">
+                    <h3 class="font-bold text-lg text-gray-800">${company.name}</h3>
+                    <p class="text-sm text-gray-500 mb-3">${company.industry}</p>
+                    <p class="text-gray-600 text-sm mb-4 leading-relaxed">${company.snippet}</p>
+                    <div class="flex flex-wrap gap-2">
+                        ${company.themes.map(themeId => `
+                            <span class="tag" style="background-color: ${themeColors[themeId] || '#cbd5e0'}; color: white;">
+                                ${themes.find(t => t.id === themeId)?.name || themeId}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function updateFilterStatus(themeId, count) {
+            const statusEl = document.getElementById('filter-status');
+            if (themeId === 'All') {
+                statusEl.textContent = `Showing all ${count} companies. Select a theme to begin filtering.`;
+            } else {
+                const themeName = themes.find(t => t.id === themeId)?.name || themeId;
+                statusEl.textContent = `Showing ${count} companies focused on "${themeName}".`;
+            }
+        }
+
+        function createChart() {
+            const ctx = document.getElementById('themesChart').getContext('2d');
+            const themeCounts = themes.map(theme => ({
+                id: theme.id,
+                name: theme.name,
+                count: companyData.filter(c => c.themes.includes(theme.id)).length,
+                color: theme.color,
+            })).sort((a, b) => b.count - a.count);
+
+            const labels = themeCounts.map(t => t.name);
+            const data = themeCounts.map(t => t.count);
+            const backgroundColors = themeCounts.map(t => t.color);
+            const themeIds = themeCounts.map(t => t.id);
+
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Number of Companies',
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        borderColor: backgroundColors.map(c => c + 'B3'),
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: {
+                                color: '#e2e8f0',
+                            },
+                            ticks: {
+                                color: '#4a5568'
+                            }
+                        },
+                        y: {
+                            grid: {
+                                display: false,
+                            },
+                            ticks: {
+                                color: '#1a202c',
+                                font: {
+                                    weight: '500'
+                                },
+                                autoSkip: false,
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#1a202c',
+                            titleFont: {
+                                size: 14,
+                                weight: 'bold'
+                            },
+                            bodyFont: {
+                                size: 12
+                            },
+                            padding: 10,
+                            cornerRadius: 4,
+                            displayColors: false
+                        }
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const chartElement = elements[0];
+                            const index = chartElement.index;
+                            const themeId = themeIds[index];
+                            handleFilterClick(themeId);
+                        }
+                    },
+                    onHover: (event, chartElement) => {
+                         event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                    }
+                }
+            });
+        }
+
+        function updateChartHighlight(themeId) {
+            const themeCounts = themes.map(theme => ({
+                id: theme.id,
+                count: companyData.filter(c => c.themes.includes(theme.id)).length,
+                color: theme.color
+            })).sort((a, b) => b.count - a.count);
+            
+            const backgroundColors = themeCounts.map(t => {
+                return (themeId === 'All' || t.id === themeId) ? t.color : '#e2e8f0';
+            });
+            
+            chart.data.datasets[0].backgroundColor = backgroundColors;
+            chart.data.datasets[0].borderColor = backgroundColors.map(c => c === '#e2e8f0' ? '#e2e8f0' : c + 'B3');
+            chart.update();
+        }
+    </script>
+
+</body>
+</html>
